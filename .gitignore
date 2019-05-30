@@ -1,1 +1,5 @@
 *.*~
+*.tar.gz
+
+data/BEST/features/*
+data/EPIC-Skills/features/*
