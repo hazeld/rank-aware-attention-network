@@ -1,5 +1,6 @@
 *.*~
 *.tar.gz
+*.pyc
 
 data/BEST/features/*
 data/EPIC-Skills/features/*
