@@ -15,9 +15,9 @@ def main():
     global args, best_prec, writer
     args = parser.parse_args()
 
-    writer = SummaryWriter('_'.join((args.run_folder, 'uniform_weighting', 'lr', str(args.lr))))
+    writer = SummaryWriter('_'.join((args.run_folder, 'attention', str(args.attention), 'lr', str(args.lr))))
 
-    model = RAAN(args.num_samples)
+    model = RAAN(args.num_samples, args.attention, args.num_filters)
     model = model.cuda()
 
     train_loader = torch.utils.data.DataLoader(
@@ -89,7 +89,7 @@ def train(train_loader, model, criterion, optimizer, epoch, shuffle=True):
         # measure accuracy and record loss
         prec = accuracy(output1.data, output2.data)
         all_losses = loss
-        losses.update(all_losses.data[0], input1.size(0))
+        losses.update(all_losses.data.item(), input1.size(0))
         acc.update(prec, input1.size(0))
 
         all_losses.backward()
@@ -156,7 +156,7 @@ def validate(val_loader, model, criterion, epoch):
     return acc.avg
 
 def save_checkpoint(state, is_best, filename='checkpoint.pth.tar'):
-    filename = '_'.join((args.snapshot_pref, 'lr', str(args.lr), filename))
+    filename = '_'.join((args.snapshot_pref, 'attention', str(args.attention), 'lr', str(args.lr), filename))
     torch.save(state, filename)
     if is_best:
         best_name = '_'.join((args.snapshot_pref, 'model_best.pth.tar'))

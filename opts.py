@@ -6,6 +6,8 @@ parser.add_argument('root_path', type=str)
 
 # ============================= Model Configs ================================
 parser.add_argument('--num_samples', type=int, default=400)
+parser.add_argument('--attention', action='store_true', default=False)
+parser.add_argument('--num_filters', type=int, default=3)
 
 # =========================== Learning Configs ===============================
 parser.add_argument('--epochs', default=2000, type=int, metavar='N',
