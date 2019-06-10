@@ -31,10 +31,10 @@ class RAAN(nn.Module):
             for i in range(0, self.num_filters):
                 att_list.append(self.att_net[i](input))
             all_atts = torch.stack(att_list, 2)
-            att = torch.mean(all_atts, 2)
         else:
-            att = torch.ones((input.size(0),self.num_features, 1)).cuda() * (1.0/self.num_features)
+            all_atts = torch.ones((input.size(0),self.num_features, self.num_filters, 1)).cuda() * (1.0/self.num_features)
+        att = torch.mean(all_atts, 2)
         input = torch.mul(input, att)
         input = input.sum(1)
         input = self.fc(input).view(-1)
-        return input, att
+        return input, all_atts

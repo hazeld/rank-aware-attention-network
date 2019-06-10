@@ -8,6 +8,8 @@ parser.add_argument('root_path', type=str)
 parser.add_argument('--num_samples', type=int, default=400)
 parser.add_argument('--attention', action='store_true', default=False)
 parser.add_argument('--num_filters', type=int, default=3)
+parser.add_argument('--diversity_loss', action='store_true', default=False)
+parser.add_argument('--beta', type=float, default=0.1)
 
 # =========================== Learning Configs ===============================
 parser.add_argument('--epochs', default=2000, type=int, metavar='N',
