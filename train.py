@@ -6,6 +6,7 @@ import shutil
 from dataset import SkillDataSet
 from model import RAAN
 from opts import parser
+from losses import RankingAttentionLoss 
 
 from tensorboardX import SummaryWriter
 
@@ -15,10 +16,14 @@ def main():
     global args, best_prec, writer
     args = parser.parse_args()
 
-    writer = SummaryWriter('_'.join((args.run_folder, 'attention', str(args.attention), 'filters', str(args.num_filters), 'diversity', str(args.diversity_loss), str(args.beta), 'lr', str(args.lr))))
+    writer = SummaryWriter('_'.join((args.run_folder, 'attention', str(args.attention), 'filters',
+                                     str(args.num_filters), 'diversity', str(args.diversity_loss),
+                                     str(args.lambda_param), 'disparity', str(args.disparity_loss), 'lr',
+                                     str(args.lr))))
 
-    model = RAAN(args.num_samples, args.attention, args.num_filters)
-    model = model.cuda()
+    model = RAAN(args.num_samples, args.attention, args.num_filters).cuda()
+    if args.disparity_loss:
+        model_uniform = RAAN(args.num_samples, False, 1).cuda()
 
     train_loader = torch.utils.data.DataLoader(
         SkillDataSet(args.root_path, args.train_list, ftr_tmpl='{}_{}.npz'),
@@ -35,14 +40,33 @@ def main():
         pin_memory=True)
 
     criterion = torch.nn.MarginRankingLoss(margin=1.0).cuda()
+    if args.disparity_loss:
+        criterion_disparity = RankingAttentionLoss(margin=0.1)
 
-    optimizer = torch.optim.Adam(model.parameters(), args.lr)
+    if args.disparity_loss:
+        attention_params = []
+        model_params = []
+        for name, param in model.named_parameters():
+            if param.requires_grad and 'att' in name:
+                attention_params.append(param)
+            else:
+                model_params.append(param)
+        optimizer = torch.optim.Adam(list(model_uniform.parameters()) + model_params, args.lr)
+        optimizer_attention = torch.optim.Adam(attention_params, args.lr*0.1)
+    else:
+        optimizer = torch.optim.Adam(model.parameters(), args.lr)
 
     if args.evaluate:
         validate(val_loader, model, criterion, 0)
 
+    phase = 0
     for epoch in range(args.start_epoch, args.epochs):
-        train(train_loader, model, criterion, optimizer, epoch)
+        if args.disparity_loss:
+            phase = train_with_uniform(train_loader, model, model_uniform, criterion,
+                                       criterion_disparity, optimizer, optimizer_attention,
+                                       epoch, phase=phase)
+        else:
+            train(train_loader, model, criterion, optimizer, epoch)
 
         if (epoch + 1) % args.eval_freq == 0 or epoch == args.epochs - 1:
             prec = validate(val_loader, model, criterion, (epoch + 1))
@@ -55,7 +79,7 @@ def main():
             }, is_best)
     writer.close()
 
-def train(train_loader, model, criterion, optimizer, epoch, shuffle=True):
+def train(train_loader, model, criterion, optimizer, epoch, shuffle=True, phase=0):
     av_meters = {'batch_time': AverageMeter(), 'data_time': AverageMeter(), 'losses': AverageMeter(),
                  'ranking_losses': AverageMeter(), 'diversity_losses': AverageMeter(),
                  'acc': AverageMeter()}
@@ -63,6 +87,7 @@ def train(train_loader, model, criterion, optimizer, epoch, shuffle=True):
     model.train()
 
     end = time.time()
+    
     optimizer.zero_grad()
     for i, (input1, input2) in enumerate(train_loader):
         # measure data loading time
@@ -84,7 +109,7 @@ def train(train_loader, model, criterion, optimizer, epoch, shuffle=True):
         if args.diversity_loss:
             div_loss_att1 = diversity_loss(att1)
             div_loss_att2 = diversity_loss(att2)
-            all_losses += args.beta*(div_loss_att1 + div_loss_att2)
+            all_losses += args.lambda_param*(div_loss_att1 + div_loss_att2)
             
         # measure accuracy and backprop
         prec = accuracy(output1.data, output2.data)
@@ -111,6 +136,88 @@ def train(train_loader, model, criterion, optimizer, epoch, shuffle=True):
 
     tensorboard_log(av_meters, 'train', epoch) 
 
+
+def train_with_uniform(train_loader, model, model_uniform, criterion, criterion_disparity, optimizer, optimizer_attention, epoch, shuffle=True, phase=0):
+    av_meters = {'batch_time': AverageMeter(), 'data_time': AverageMeter(), 'losses': AverageMeter(),
+                 'ranking_losses': AverageMeter(), 'ranking_losses_uniform': AverageMeter(),
+                 'diversity_losses': AverageMeter(), 'disparity_losses': AverageMeter(),
+                 'acc': AverageMeter(), 'acc_uniform': AverageMeter()}
+    
+    model.train()
+    model_uniform.train()
+    
+    end = time.time()
+    
+    optimizer.zero_grad()
+    for i, (input1, input2) in enumerate(train_loader):
+        # measure data loading time
+        av_meters['data_time'].update(time.time() - end)
+        input_var1 = torch.autograd.Variable(input1.cuda(), requires_grad=True)
+        input_var2 = torch.autograd.Variable(input2.cuda(), requires_grad=True)
+        ## add small amount of gaussian noise to features for data augmentation
+        if args.transform:
+            input_var1, input_var2 = data_augmentation(input_var1, input_var2)
+            
+        labels = torch.ones(input1.size(0)).cuda()
+        target  = torch.autograd.Variable(labels, requires_grad=False)
+
+        output1, att1 = model(input_var1)
+        output2, att2 = model(input_var2)
+        output1_uniform, _ = model_uniform(input_var1)
+        output2_uniform, _ = model_uniform(input_var2)
+        
+        ranking_loss = criterion(output1, output2, target)
+        ranking_loss_uniform = criterion(output1_uniform, output2_uniform, target)
+        disparity_loss = criterion_disparity(output1, output2, output1_uniform, output2_uniform)
+        if args.diversity_loss:
+            div_loss_att1 = diversity_loss(att1)
+            div_loss_att2 = diversity_loss(att2)
+
+        all_losses = 0
+        if phase == 0:
+            all_losses += ranking_loss
+            all_losses += ranking_loss_uniform
+        else:
+            all_losses += disparity_loss
+            if args.diversity_loss:
+                all_losses += args.lambda_param*(div_loss_att1 + div_loss_att2)
+        # measure accuracy and backprop
+        prec = accuracy(output1.data, output2.data)
+        prec_uniform = accuracy(output1_uniform.data, output2_uniform.data)
+
+        all_losses.backward()
+        
+        if phase == 0:
+            optimizer.step()
+            optimizer.zero_grad()
+            phase = 1
+        else:
+            optimizer_attention.step()
+            optimizer_attention.zero_grad()
+            phase = 0
+
+        # record losses
+        av_meters['ranking_losses'].update(ranking_loss.item(), input1.size(0))
+        av_meters['ranking_losses_uniform'].update(ranking_loss_uniform.item(), input1.size(0))
+        av_meters['disparity_losses'].update(disparity_loss.item(), input1.size(0))
+        if args.diversity_loss:
+            av_meters['diversity_losses'].update(div_loss_att1.item() + div_loss_att2.item(),
+                                                input1.size(0)*2)
+        av_meters['losses'].update(all_losses.data.item(), input1.size(0))
+        av_meters['acc'].update(prec, input1.size(0))
+        av_meters['acc_uniform'].update(prec_uniform, input1.size(0))
+
+        # measure elapsed time
+        av_meters['batch_time'].update(time.time() - end)
+        end = time.time()
+
+        if i % (args.print_freq) == 0:
+            console_log_train(av_meters, epoch, i, len(train_loader), )
+
+    tensorboard_log_with_uniform(av_meters, 'train', epoch)
+    return phase
+
+    
 def validate(val_loader, model, criterion, epoch):
     av_meters = {'batch_time': AverageMeter(), 'losses': AverageMeter(),
                  'ranking_losses': AverageMeter(), 'diversity_losses': AverageMeter(),
@@ -135,7 +242,7 @@ def validate(val_loader, model, criterion, epoch):
         if args.diversity_loss:
             div_loss_att1 = diversity_loss(att1)
             div_loss_att2 = diversity_loss(att2)
-            all_losses += args.beta*(div_loss_att1 + div_loss_att2)
+            all_losses += args.lambda_param*(div_loss_att1 + div_loss_att2)
         
         # measure accuracy
         prec = accuracy(output1.data, output2.data)
@@ -161,7 +268,9 @@ def validate(val_loader, model, criterion, epoch):
     return av_meters['acc'].avg
 
 def save_checkpoint(state, is_best, filename='checkpoint.pth.tar'):
-    filename = '_'.join((args.snapshot_pref, 'attention', str(args.attention), 'filters', str(args.num_filters), 'diversity', str(args.diversity_loss), str(args.beta), 'lr', str(args.lr), filename))
+    filename = '_'.join((args.snapshot_pref, 'attention', str(args.attention), 'filters',
+                         str(args.num_filters), 'diversity', 'disparity', str(args.disparity_loss),
+                         str(args.diversity_loss), str(args.lambda_param), 'lr', str(args.lr), filename))
     torch.save(state, filename)
     if is_best:
         best_name = '_'.join((args.snapshot_pref, 'model_best.pth.tar'))
@@ -221,6 +330,13 @@ def tensorboard_log(av_meters, mode, epoch):
     writer.add_scalar(mode+'/ranking_loss', av_meters['ranking_losses'].avg, epoch)
     writer.add_scalar(mode+'/diversity_loss', av_meters['diversity_losses'].avg, epoch)
     writer.add_scalar(mode+'/acc', av_meters['acc'].avg, epoch)
+
+def tensorboard_log_with_uniform(av_meters, mode, epoch):
+    tensorboard_log(av_meters, mode, epoch)
+    writer.add_scalar(mode+'/disparity_loss', av_meters['disparity_losses'].avg, epoch)
+    writer.add_scalar(mode+'/ranking_loss_uniform', av_meters['ranking_losses_uniform'].avg, epoch)
+    writer.add_scalar(mode+'/acc_uniform', av_meters['acc_uniform'].avg, epoch)
+    
 
 def data_augmentation(input_var1, input_var2):
     noise = torch.autograd.Variable(torch.normal(torch.zeros(input_var1.size()[1],
