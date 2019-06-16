@@ -16,4 +16,10 @@ The split of training and test videos can be found under `data/BEST/splits/<task
 We also include the EPIC-Skills training and testing pair files in the same format under `data/EPIC-Skills/splits/<task_name>/<train|test>_split<split_num>.txt`
 
 
-Code coming soon.
+### Code
+
+For tasks from EPIC-Skills run using:
+`python train.py data/EPIC-Skills/splits/<task>/train_split<split>.txt data/EPIC-Skills/splits/<task>/test_split<split>.txt <path_to_features> -e --transform -attention --diversity_loss --disparity_loss --rank_aware_loss`
+
+For tasks from BEST run using:
+`python train.py data/BEST/splits/<task>/train.txt data/BEST/splits/<task>/test.txt <path_to_features> -e --transform -attention --diversity_loss --disparity_loss --rank_aware_loss`
