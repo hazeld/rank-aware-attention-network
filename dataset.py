@@ -60,5 +60,5 @@ class SkillDataSetSingle(SkillDataSet):
     def get(self, record):
         vid = self._load_features(record.path)
 
-        name = record.path
+        name = record.path.split('/')[-1]
         return name, vid

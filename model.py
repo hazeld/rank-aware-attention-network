@@ -21,8 +21,10 @@ class RAAN(nn.Module):
                 nn.ReLU(),
                 nn.Linear(self.fc_output, 1),
                 nn.Softmax(dim=1)))
-        
-        self.fc = nn.Linear(self.input_size, 1)
+
+        self.fc = nn.Sequential(
+            nn.Linear(self.input_size, 1),
+            nn.Tanh())
 
     def forward(self, input):
         input = input.view(-1, self.num_features, self.input_size)
@@ -33,8 +35,11 @@ class RAAN(nn.Module):
             all_atts = torch.stack(att_list, 2)
         else:
             all_atts = torch.ones((input.size(0),self.num_features, self.num_filters, 1)).cuda() * (1.0/self.num_features)
-        att = torch.mean(all_atts, 2)
-        input = torch.mul(input, att)
-        input = input.sum(1)
-        input = self.fc(input).view(-1)
-        return input, all_atts
+        #att = torch.mean(all_atts, 2)
+        outputs = []
+        for i in range(0, self.num_filters):
+            tmp_outputs = torch.mul(input, all_atts[:,:,i,:])
+            tmp_outputs = tmp_outputs.sum(1)
+            outputs.append(self.fc(tmp_outputs).view(-1)*2)
+        all_outputs = torch.stack(outputs, 1)
+        return all_outputs, all_atts

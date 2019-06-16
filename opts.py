@@ -9,8 +9,12 @@ parser.add_argument('--num_samples', type=int, default=400)
 parser.add_argument('--attention', action='store_true', default=False)
 parser.add_argument('--num_filters', type=int, default=3)
 parser.add_argument('--diversity_loss', action='store_true', default=False)
-parser.add_argument('--lambda_param', type=float, default=0.1, help='weight of the diversity loss')
 parser.add_argument('--disparity_loss', action='store_true', default=False)
+parser.add_argument('--rank_aware_loss', action='store_true', default=False)
+parser.add_argument('--lambda_param', type=float, default=0.1, help='weight of the diversity loss')
+parser.add_argument('--m1', type=float, default=1.0, help='margin for ranking loss')
+parser.add_argument('--m2', type=float, default=0.05, help='margin for disparity loss')
+parser.add_argument('--m3', type=float, default=0.15, help='margin for rank aware loss')
 
 # =========================== Learning Configs ===============================
 parser.add_argument('--epochs', default=2000, type=int, metavar='N',
