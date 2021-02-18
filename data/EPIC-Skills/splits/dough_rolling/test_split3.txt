@@ -45,7 +45,6 @@ S25_roll_dough S32_roll_dough
 S55_roll_dough S37_roll_dough
 S33_roll_dough S19_roll_dough
 S33_roll_dough S08_roll_dough
-S33_roll_dough S08_roll_dough
 S48_roll_dough S37_roll_dough
 S22_roll_dough S34_roll_dough
 S54_roll_dough S37_roll_dough
@@ -75,7 +74,6 @@ S36_roll_dough S50_roll_dough
 S20_roll_dough S31_roll_dough
 S32_roll_dough S50_roll_dough
 S32_roll_dough S20_roll_dough
-S33_roll_dough S08_roll_dough
 S36_roll_dough S35_roll_dough
 S07_roll_dough S31_roll_dough
 S09_roll_dough S35_roll_dough
