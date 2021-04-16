@@ -20,8 +20,8 @@ We also include the EPIC-Skills training and testing pair files in the same form
 
 For tasks from EPIC-Skills run using:
 
-```python train.py data/EPIC-Skills/splits/<task>/train_split<split>.txt data/EPIC-Skills/splits/<task>/test_split<split>.txt <path_to_features> -e --transform -attention --diversity_loss --disparity_loss --rank_aware_loss```
+```python train.py data/EPIC-Skills/splits/<task>/train_split<split>.txt data/EPIC-Skills/splits/<task>/test_split<split>.txt <path_to_features> -e --transform --attention --diversity_loss --disparity_loss --rank_aware_loss```
 
 For tasks from BEST run using:
 
-```python train.py data/BEST/splits/<task>/train.txt data/BEST/splits/<task>/test.txt <path_to_features> -e --transform -attention --diversity_loss --disparity_loss --rank_aware_loss```
+```python train.py data/BEST/splits/<task>/train.txt data/BEST/splits/<task>/test.txt <path_to_features> -e --transform --attention --diversity_loss --disparity_loss --rank_aware_loss```
